@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS + IMU 3D Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+</head>
+<body class="bg-gray-100 p-6">
+
+<h1 class="text-3xl font-bold mb-6">IMU + GPS 3D Dashboard</h1>
+
+<div class="flex gap-6 flex-wrap">
+    <!-- Card GPS -->
+    <div class="bg-white shadow rounded p-4 w-96">
+        <h2 class="text-xl font-semibold mb-2">GPS Data</h2>
+        <p>Latitude: <span id="gps-lat">-</span></p>
+        <p>Longitude: <span id="gps-lon">-</span></p>
+        <p>Altitude: <span id="gps-alt">-</span> m</p>
+    </div>
+
+    <!-- Card IMU -->
+    <div class="bg-white shadow rounded p-4 w-96">
+        <h2 class="text-xl font-semibold mb-2">IMU Data</h2>
+        <p>Accelerometer: <span id="acc">-</span></p>
+        <p>Gyroscope: <span id="gyro">-</span></p>
+    </div>
+</div>
+
+<img src="/video1" width="640" height="480">
+<img src="/video2" width="640" height="480">
+
+
+<!-- 3D Model -->
+<div id="3d-container" class="bg-white shadow rounded p-4 mt-6 w-full h-[400px]"></div>
+
+<script>
+let scene, camera, renderer, imuModel;
+
+// Init 3D scene
+function init3D(){
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / 500, 0.1, 1000);
+    renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(window.innerWidth, 400);
+    document.getElementById('3d-container').appendChild(renderer.domElement);
+
+    // IMU board as cube
+    const boardGeo = new THREE.BoxGeometry(2, 0.3, 1);
+    const boardMat = new THREE.MeshStandardMaterial({color: 0x555555});
+    imuModel = new THREE.Mesh(boardGeo, boardMat);
+    scene.add(imuModel);
+
+    // Axis arrows: X=red, Y=green, Z=blue
+    const arrowX = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,0), 1, 0xff0000);
+    const arrowY = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0), 1, 0x00ff00);
+    const arrowZ = new THREE.ArrowHelper(new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,0), 1, 0x0000ff);
+    imuModel.add(arrowX);
+    imuModel.add(arrowY);
+    imuModel.add(arrowZ);
+
+    // Light
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(5,5,5);
+    scene.add(light);
+
+    camera.position.z = 5;
+}
+
+// Update IMU orientation based on accelerometer
+function updateIMU(acc){
+    if(imuModel && acc){
+        const [pitch, roll] = getTilt(acc);
+        imuModel.rotation.x = pitch;
+        imuModel.rotation.y = roll;
+        imuModel.rotation.z = 0; // yaw optional
+    }
+}
+
+// Convert accelerometer to pitch/roll
+function getTilt(acc){
+    const [ax, ay, az] = acc;
+    const pitch = Math.atan2(-ax, Math.sqrt(ay*ay + az*az));
+    const roll = Math.atan2(ay, az);
+    return [pitch, roll];
+}
+
+// Fetch data & update
+async function updateData(){
+    const res = await fetch('/data');
+    const json = await res.json();
+
+    document.getElementById('gps-lat').innerText = json.gps.lat ?? '-';
+    document.getElementById('gps-lon').innerText = json.gps.lon ?? '-';
+    document.getElementById('gps-alt').innerText = json.gps.alt ?? '-';
+    document.getElementById('acc').innerText = json.imu.acc.join(', ');
+    document.getElementById('gyro').innerText = json.imu.gyro.join(', ');
+
+    updateIMU(json.imu.acc);
+}
+
+init3D();
+
+function animate(){
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+}
+animate();
+setInterval(updateData, 200);
+</script>
+
+
+</body>
+</html
